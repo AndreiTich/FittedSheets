@@ -148,7 +148,17 @@ public class SheetViewController: UIViewController {
     
     public var shouldDismiss: ((SheetViewController) -> Bool)?
     public var didDismiss: ((SheetViewController) -> Void)?
+
+    /// Closure to execute when the sheet size has completed changing (animation finished), and the new size is
+    /// different from the old size
     public var sizeChanged: ((SheetViewController, SheetSize, CGFloat) -> Void)?
+
+    /// Closure to execute before the sheet finishes changing size (Pan gesture ends, animation has not begun yet)
+    public var willAnimateToNewSize: ((SheetViewController, SheetSize, CGFloat) -> Void)?
+
+    /// Closure to execute when the sheet size has completed changing (animation finished), executes regardless of
+    /// what old size was
+    public var didAnimateToNewSize: ((SheetViewController, SheetSize, CGFloat) -> Void)?
     public var panGestureShouldBegin: ((UIPanGestureRecognizer) -> Bool?)?
     
     public private(set) var contentViewController: SheetContentViewController
@@ -478,6 +488,7 @@ public class SheetViewController: UIViewController {
                 self.currentSize = newSize
                 
                 let newContentHeight = self.height(for: newSize)
+                willAnimateToNewSize?(self, newSize, newContentHeight)
                 UIView.animate(
                     withDuration: animationDuration,
                     delay: 0,
@@ -492,6 +503,7 @@ public class SheetViewController: UIViewController {
                     self.view.layoutIfNeeded()
                 }, completion: { complete in
                     self.isPanning = false
+                    self.didAnimateToNewSize?(self, newSize, newContentHeight)
                     if previousSize != newSize {
                         self.sizeChanged?(self, newSize, newContentHeight)
                     }
