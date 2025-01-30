@@ -1,10 +1,12 @@
+> I very much love this and appreciate this library, but need some new features in it. Although there are some fairly recent PRs in the original codebase (Sept 2024), there have been no major changes or feature additions in over a year. In my version ill be cleaning up a few things and adding some functionality. I hope the original author @gordontucker considers my PRs. Cheers!
+
 # FittedSheets
 Bottom sheets for iOS
 
 ![Bitrise Status](https://app.bitrise.io/app/13f283bd401bbe1c.svg?token=MGSP3TGNYPSgB5gWq4MEQg)
 
 Minimum requirement:  
-![iOSVersion](https://img.shields.io/badge/iOS-11-green.svg) 
+![iOSVersion](https://img.shields.io/badge/iOS-15-green.svg) 
 ![SwiftVersion](https://img.shields.io/badge/Swift-5-green.svg) 
 ![XcodeVersion](https://img.shields.io/badge/Xcode-11-green.svg)  
 
