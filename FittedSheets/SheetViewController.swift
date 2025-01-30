@@ -394,7 +394,7 @@ public class SheetViewController: UIViewController {
                 newHeight = maxHeight
             }
         }
-        
+
         switch gesture.state {
             case .cancelled, .failed:
                 UIView.animate(withDuration: 0.3, delay: 0, options: [.curveEaseOut], animations: {
@@ -445,30 +445,36 @@ public class SheetViewController: UIViewController {
                     })
                     return
                 }
-                
-                var newSize = self.currentSize
-                if point.y < 0 {
-                    // We need to move to the next larger one
-                    newSize = self.orderedSizes.last ?? self.currentSize
-                    for size in self.orderedSizes.reversed() {
-                        if finalHeight < self.height(for: size) {
-                            newSize = size
-                        } else {
-                            break
-                        }
-                    }
+
+                let previousSize = self.currentSize
+                var newSize = currentSize
+
+                if options.shouldSnapToClosestSheetSize {
+                    newSize = closestSize(to: finalHeight)
                 } else {
-                    // We need to move to the next smaller one
-                    newSize = self.orderedSizes.first ?? self.currentSize
-                    for size in self.orderedSizes {
-                        if finalHeight > self.height(for: size) {
-                            newSize = size
-                        } else {
-                            break
+                    if point.y < 0 {
+                        // We need to move to the next larger one
+                        newSize = self.orderedSizes.last ?? self.currentSize
+                        for size in self.orderedSizes.reversed() {
+                            if finalHeight < self.height(for: size) {
+                                newSize = size
+                            } else {
+                                break
+                            }
+                        }
+                    } else {
+                        // We need to move to the next smaller one
+                        newSize = self.orderedSizes.first ?? self.currentSize
+                        for size in self.orderedSizes {
+                            if finalHeight > self.height(for: size) {
+                                newSize = size
+                            } else {
+                                break
+                            }
                         }
                     }
                 }
-                let previousSize = self.currentSize
+
                 self.currentSize = newSize
                 
                 let newContentHeight = self.height(for: newSize)
@@ -495,6 +501,17 @@ public class SheetViewController: UIViewController {
             @unknown default:
                 break // Do nothing
         }
+    }
+
+    /// Finds the closest SheetSize to the target height.
+    /// - Parameters:
+    ///   - targetHeight: The target height to compare against.
+    /// - Returns: The closest SheetSize matching the criteria, or currentSize if no match is found.
+    private func closestSize(to targetHeight: CGFloat) -> SheetSize {
+        let heightsTupleArray: [(CGFloat, SheetSize)] = orderedSizes.map { (height(for: $0), $0) }
+
+        let closestHeightTuple = heightsTupleArray.min(by: { abs($0.0 - targetHeight) < abs($1.0 - targetHeight) })
+        return closestHeightTuple?.1 ?? currentSize
     }
 
     private func registerKeyboardObservers() {

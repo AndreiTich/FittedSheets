@@ -32,6 +32,11 @@ public struct SheetOptions {
     public var transitionVelocity: CGFloat = 0.8
     public var transitionOverflowType: TransitionOverflowType = .automatic
     
+    /// When enabled, the sheet will snap to the closest sheet size relative to the calculated
+    /// finalHeight in the panGesture, it will not take into account which direction the final
+    /// point at which the gesture ends (which the default behavior does)
+    public var shouldSnapToClosestSheetSize: Bool = false
+
     /// Default value 500, greater value will require more velocity to dismiss. Lesser values will do opposite.
     public var pullDismissThreshod: CGFloat = 500.0
     
@@ -59,7 +64,8 @@ public struct SheetOptions {
                 useInlineMode: Bool? = nil,
                 horizontalPadding: CGFloat? = nil,
                 maxWidth: CGFloat? = nil,
-                isRubberBandEnabled: Bool? = nil) {
+                isRubberBandEnabled: Bool? = nil,
+                shouldSnapToClosestSheetSize: Bool? = nil) {
         let defaultOptions = SheetOptions.default
         self.pullBarHeight = pullBarHeight ?? defaultOptions.pullBarHeight
         self.presentingViewCornerRadius = presentingViewCornerRadius ?? defaultOptions.presentingViewCornerRadius
@@ -72,6 +78,7 @@ public struct SheetOptions {
         let maxWidth = maxWidth ?? defaultOptions.maxWidth
         self.maxWidth = maxWidth == 0 ? nil : maxWidth
         self.isRubberBandEnabled = isRubberBandEnabled ?? false
+        self.shouldSnapToClosestSheetSize = shouldSnapToClosestSheetSize ?? false
     }
     
     @available(*, unavailable, message: "cornerRadius, minimumSpaceAbovePullBar, gripSize and gripColor are now properties on SheetViewController. Use them instead.")
