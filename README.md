@@ -1,4 +1,4 @@
-> I very much love this and appreciate this library, but need some new features in it. Although there are some fairly recent PRs in the original codebase (Sept 2024), there have been no major changes or feature additions in over a year. In my version ill be cleaning up a few things and adding some functionality. I hope the original author @gordontucker considers my PRs. Cheers!
+> I very much love and appreciate this library, but need some new features in it. Although there are some fairly recent PRs in the original codebase (Sept 2024), there have been no major changes or feature additions in over a year. In my version ill be cleaning up a few things and adding some functionality. I hope the original author @gordontucker considers my PRs. Cheers!
 
 # FittedSheets
 Bottom sheets for iOS
