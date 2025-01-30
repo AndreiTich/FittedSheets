@@ -362,7 +362,16 @@ public class SheetViewController: UIViewController {
         panGestureRecognizer.delegate = self
         self.panGestureRecognizer = panGestureRecognizer
     }
-    
+
+    /// Add an extra target for the main panGestureRecognizer, this gives users of
+    /// this library to observe the pan from outside the SheetViewController
+    /// - Parameters:
+    ///   - target: Target object for the GestureRecognizer
+    ///   - action: Selector to pass to the panGestureRecognizer
+    public func addAdditionalTargetForPanGestureRecognizer(target: Any, action: Selector) {
+        panGestureRecognizer.addTarget(target, action: action)
+    }
+
     @objc func panned(_ gesture: UIPanGestureRecognizer) {
         let point = gesture.translation(in: gesture.view?.superview)
         if gesture.state == .began {
