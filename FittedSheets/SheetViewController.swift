@@ -615,13 +615,15 @@ public class SheetViewController: UIViewController {
         guard oldConstraintHeight != newHeight else {
             return
         }
-        
+
+        self.willAnimateToNewSize?(self, size, newHeight)
         if animated {
             UIView.animate(withDuration: duration, delay: 0, options: options, animations: { [weak self] in
                 guard let self = self, let constraint = self.contentViewHeightConstraint else { return }
                 constraint.constant = newHeight
                 self.view.layoutIfNeeded()
             }, completion: { _ in
+                self.didAnimateToNewSize?(self, size, newHeight)
                 if previousSize != size {
                     self.sizeChanged?(self, size, newHeight)
                 }
@@ -633,6 +635,8 @@ public class SheetViewController: UIViewController {
                 self.contentViewHeightConstraint?.constant = self.height(for: size)
                 self.contentViewController.view.layoutIfNeeded()
             }
+            self.didAnimateToNewSize?(self, size, newHeight)
+            self.sizeChanged?(self, size, newHeight)
             complete?()
         }
     }
