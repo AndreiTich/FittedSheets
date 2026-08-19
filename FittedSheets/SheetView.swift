@@ -14,6 +14,7 @@ class SheetView: UIView {
     weak var delegate: SheetViewDelegate?
 
     override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        guard super.point(inside: point, with: event) else { return false }
         return self.delegate?.sheetPoint(inside: point, with: event) ?? true
     }
 }

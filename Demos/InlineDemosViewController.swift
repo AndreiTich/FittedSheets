@@ -36,7 +36,8 @@ class InlineDemosViewController: UIViewController {
         MaxWidthDemo.self,
         BlurDemo.self,
         CornerCurveDemo.self,
-        SnapToClosestSheetSizeDemo.self
+        SnapToClosestSheetSizeDemo.self,
+        LeadingPanelDemo.self
     ]
     
     override func viewDidLoad() {

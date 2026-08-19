@@ -150,6 +150,42 @@ sheetController.allowGestureThroughOverlay = true
 sheetController.animateIn(to: view, in: self)
 ```
 
+### Adaptive inline layout
+
+An inline sheet can automatically switch between a compact bottom card and a regular-width
+side panel:
+
+```swift
+var adaptive = AdaptiveInlineLayout()
+adaptive.regularWidthRule = .horizontalSizeClass
+adaptive.panelWidth = 330
+adaptive.panelEdge = .leading // Use .trailing for the opposite side.
+adaptive.panelInsets = NSDirectionalEdgeInsets(
+    top: 12,
+    leading: 16,
+    bottom: 12,
+    trailing: 16
+)
+adaptive.panelInsetReference = .safeArea // Or .container.
+adaptive.regularWidthCornerRadius = 16
+adaptive.regularWidthShadow = .standard // .none, .subtle, .standard, .prominent, or custom.
+
+var options = SheetOptions(useInlineMode: true)
+options.adaptiveInlineLayout = adaptive
+
+let sheet = SheetViewController(controller: controller, options: options)
+sheet.animateIn(to: view, in: self)
+```
+
+The configuration can also be replaced while the sheet is visible:
+
+```swift
+guard var adaptive = sheet.adaptiveInlineLayout else { return }
+adaptive.panelEdge = .trailing
+adaptive.regularWidthShadow = .prominent
+sheet.updateAdaptiveInlineLayout(adaptive, animated: true)
+```
+
 ## Scrolling
 
 ```swift
