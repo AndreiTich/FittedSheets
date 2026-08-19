@@ -160,6 +160,58 @@ public class SheetViewController: UIViewController {
     /// what old size was
     public var didAnimateToNewSize: ((SheetViewController, SheetSize, CGFloat) -> Void)?
     public var panGestureShouldBegin: ((UIPanGestureRecognizer) -> Bool?)?
+
+    // MARK: - Adaptive inline layout
+
+    /// Whether the sheet is currently in regular-width leading-panel mode when using
+    /// ``SheetOptions/adaptiveInlineLayout``. Always false for non-adaptive sheets.
+    public private(set) var isAdaptiveRegularWidth: Bool = false
+
+    /// Detent sizes used in compact (bottom-card) mode. Applied automatically on resize when
+    /// ``SheetOptions/adaptiveInlineLayout`` is set.
+    public var adaptiveCompactSizes: [SheetSize] = []
+
+    /// Detent sizes used in regular-width (leading panel) mode.
+    public var adaptiveRegularWidthSizes: [SheetSize] = [.fullscreen]
+
+    /// Called after the adaptive layout guide swaps modes so the host can update chrome
+    /// (search bar column width, map insets, etc.).
+    public var adaptiveLayoutDidChange: ((SheetViewController, Bool) -> Void)?
+
+    /// The current adaptive inline-layout configuration, if one was supplied in `SheetOptions`.
+    public var adaptiveInlineLayout: AdaptiveInlineLayout? {
+        options.adaptiveInlineLayout
+    }
+
+    /// Replaces the adaptive inline-layout configuration.
+    ///
+    /// This can be called before `animateIn` or while an adaptive inline sheet is on screen.
+    /// On-screen regular-width geometry and appearance changes are applied immediately and may
+    /// be animated. Enabling adaptive layout after a non-adaptive sheet has already been installed
+    /// is unsupported because that sheet is already owned by a different constraint set.
+    public func updateAdaptiveInlineLayout(
+        _ configuration: AdaptiveInlineLayout,
+        animated: Bool = true
+    ) {
+        guard adaptiveLayoutController != nil || !isViewLoaded || view.superview == nil else {
+            assertionFailure("Adaptive inline layout cannot be enabled after a non-adaptive sheet is installed.")
+            return
+        }
+        options.adaptiveInlineLayout = configuration
+        adaptiveLayoutController?.update(configuration: configuration, animated: animated)
+    }
+
+    func setAdaptiveRegularWidth(_ isRegularWidth: Bool) {
+        prepareHeightConstraintForResize()
+        isAdaptiveRegularWidth = isRegularWidth
+    }
+
+    /// When the sheet is pinned to an adaptive layout guide in regular-width mode, the guide —
+    /// not `view.bounds` minus safe-area heuristics — defines how tall "fullscreen" is. The
+    /// adaptive controller keeps this current on every layout pass so that any `resize`/pan
+    /// computation agrees with the guide regardless of when it runs (mid-transition, after
+    /// rotation, etc.). `nil` restores the legacy full-bleed math (used in compact mode).
+    var adaptiveFullscreenHeight: CGFloat? = nil
     
     public private(set) var contentViewController: SheetContentViewController
     var overlayView = UIView()
@@ -168,6 +220,8 @@ public class SheetViewController: UIViewController {
     var overflowView = UIView()
     var overlayTapGesture: UITapGestureRecognizer?
     private var contentViewHeightConstraint: NSLayoutConstraint!
+    private var compactFullscreenTopConstraint: NSLayoutConstraint?
+    private var compactTrueFullscreenTopConstraint: NSLayoutConstraint?
     
     /// The child view controller's scroll view we are watching so we can override the pull down/up to work on the sheet when needed
     private weak var childScrollView: UIScrollView?
@@ -178,6 +232,8 @@ public class SheetViewController: UIViewController {
     private var panGestureRecognizer: InitialTouchPanGestureRecognizer!
     private var prePanHeight: CGFloat = 0
     private var isPanning: Bool = false
+    private var adaptiveLayoutController: SheetAdaptiveInlineLayoutController?
+    private var adaptiveLayoutUpdateScheduled = false
     
     public var contentBackgroundColor: UIColor? {
         get { self.contentViewController.contentBackgroundColor }
@@ -244,6 +300,17 @@ public class SheetViewController: UIViewController {
     
     public override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+    }
+
+    public override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        guard adaptiveLayoutController != nil, !adaptiveLayoutUpdateScheduled else { return }
+        adaptiveLayoutUpdateScheduled = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.adaptiveLayoutUpdateScheduled = false
+            self.adaptiveLayoutController?.updateLayoutIfNeeded()
+        }
     }
     
     public override func viewDidDisappear(_ animated: Bool) {
@@ -364,6 +431,50 @@ public class SheetViewController: UIViewController {
             $0.bottom.pinToSuperview()
             $0.top.pinToSuperview(inset: top, relation: .greaterThanOrEqual).priority = UILayoutPriority(999)
         }
+        compactFullscreenTopConstraint = contentViewController.view.topAnchor.constraint(
+            equalTo: view.safeAreaLayoutGuide.topAnchor,
+            constant: minimumSpaceAbovePullBar)
+        compactTrueFullscreenTopConstraint = contentViewController.view.topAnchor.constraint(
+            equalTo: view.topAnchor,
+            constant: minimumSpaceAbovePullBar)
+    }
+
+    /// Converts the compact fullscreen detent from a copied height into edge constraints.
+    /// Fixed/percent/intrinsic detents continue using the mutable height constraint.
+    private func updateCompactFullscreenConstraintState() {
+        guard let contentViewHeightConstraint,
+              let compactFullscreenTopConstraint,
+              let compactTrueFullscreenTopConstraint else { return }
+
+        compactFullscreenTopConstraint.constant = minimumSpaceAbovePullBar
+        compactTrueFullscreenTopConstraint.constant = minimumSpaceAbovePullBar
+        let shouldFollowEdges = options.adaptiveInlineLayout != nil
+            && !isAdaptiveRegularWidth
+            && currentSize == .fullscreen
+            && !isPanning
+
+        if shouldFollowEdges {
+            contentViewHeightConstraint.isActive = false
+            (options.useFullScreenMode
+                ? compactTrueFullscreenTopConstraint
+                : compactFullscreenTopConstraint).isActive = true
+        } else {
+            compactFullscreenTopConstraint.isActive = false
+            compactTrueFullscreenTopConstraint.isActive = false
+            contentViewHeightConstraint.isActive = true
+        }
+    }
+
+    /// Restores height-driven layout before an interactive or animated detent change.
+    private func prepareHeightConstraintForResize() {
+        guard let contentViewHeightConstraint else { return }
+        let followsCompactFullscreenEdges = compactFullscreenTopConstraint?.isActive == true
+            || compactTrueFullscreenTopConstraint?.isActive == true
+        guard followsCompactFullscreenEdges else { return }
+        contentViewHeightConstraint.constant = contentViewController.view.bounds.height
+        compactFullscreenTopConstraint?.isActive = false
+        compactTrueFullscreenTopConstraint?.isActive = false
+        contentViewHeightConstraint.isActive = true
     }
     
     private func addPanGestureRecognizer() {
@@ -388,6 +499,7 @@ public class SheetViewController: UIViewController {
             self.firstPanPoint = point
             self.prePanHeight = self.contentViewController.view.bounds.height
             self.isPanning = true
+            self.prepareHeightConstraintForResize()
         }
         
         let minHeight: CGFloat = self.height(for: self.orderedSizes.first)
@@ -423,6 +535,7 @@ public class SheetViewController: UIViewController {
                     self.overlayView.alpha = 1
                 }, completion: { _ in
                     self.isPanning = false
+                    self.updateCompactFullscreenConstraintState()
                 })
             
             case .began, .changed:
@@ -512,6 +625,7 @@ public class SheetViewController: UIViewController {
                     self.view.layoutIfNeeded()
                 }, completion: { complete in
                     self.isPanning = false
+                    self.updateCompactFullscreenConstraintState()
                     self.didAnimateToNewSize?(self, newSize, newContentHeight)
                     if previousSize != newSize {
                         self.sizeChanged?(self, newSize, newContentHeight)
@@ -571,10 +685,18 @@ public class SheetViewController: UIViewController {
         guard let size = size else { return 0 }
         let contentHeight: CGFloat
         let fullscreenHeight: CGFloat
-        if self.options.useFullScreenMode {
+        if let adaptiveHeight = self.adaptiveFullscreenHeight {
+            fullscreenHeight = adaptiveHeight - self.minimumSpaceAbovePullBar
+        } else if self.options.useFullScreenMode {
             fullscreenHeight = self.view.bounds.height - self.minimumSpaceAbovePullBar
         } else {
-            fullscreenHeight = self.view.bounds.height - self.view.compatibleSafeAreaInsets.top - self.minimumSpaceAbovePullBar
+            // `viewDidLoad` applies `additionalSafeAreaInsets.top = -pullBarHeight` so the pull
+            // bar can ride into the safe-area gap when the sheet spans the screen. When the sheet
+            // is instead pinned inside a container (adaptive/inline layout guide), the inherited
+            // inset is 0 and that offset makes `safeAreaInsets.top` NEGATIVE — subtracting it
+            // would inflate fullscreen beyond the container and poke the sheet above its bounds.
+            let topInset = max(0, self.view.compatibleSafeAreaInsets.top)
+            fullscreenHeight = self.view.bounds.height - topInset - self.minimumSpaceAbovePullBar
         }
         switch (size) {
             case .fixed(let height):
@@ -599,12 +721,53 @@ public class SheetViewController: UIViewController {
       return verticalLimit * (1 + log10(yPosition/verticalLimit))
     }
     
+    /// Prepares the sheet for a resize that will animate together with an external
+    /// `layoutIfNeeded()` call. Use this when the layout guide constraining the sheet
+    /// is also changing in the same animation pass — provide the guide's *target* bounds
+    /// so the height is calculated against the post-animation size rather than the
+    /// current `self.view.bounds`. Unlike `resize(to:animated:)`, this method does NOT
+    /// call `layoutIfNeeded`, so both the guide repositioning and the sheet's height
+    /// change animate in the same `UIView.animate` block.
+    /// - Parameter safeAreaTop: the top safe-area inset the sheet's view will have AFTER the
+    ///   transition. Mid-transition `self.view.compatibleSafeAreaInsets` still reflects the old
+    ///   position (e.g. full-bleed compact), so using it for the target height makes the final
+    ///   `resize` recompute a different value and visibly snap when the animation completes.
+    ///   Pass `nil` to use the current insets (legacy behavior).
+    public func prepareResize(to size: SheetSize, withinBounds bounds: CGRect, safeAreaTop: CGFloat? = nil) {
+        prepareHeightConstraintForResize()
+        self.currentSize = size
+        let topInset = max(0, safeAreaTop ?? self.view.compatibleSafeAreaInsets.top)
+        let fullscreenHeight: CGFloat
+        if let adaptiveHeight = self.adaptiveFullscreenHeight {
+            fullscreenHeight = adaptiveHeight - self.minimumSpaceAbovePullBar
+        } else if self.options.useFullScreenMode {
+            fullscreenHeight = bounds.height - self.minimumSpaceAbovePullBar
+        } else {
+            fullscreenHeight = bounds.height - topInset - self.minimumSpaceAbovePullBar
+        }
+        let contentHeight: CGFloat
+        switch size {
+        case .fixed(let height):
+            contentHeight = height + self.keyboardHeight
+        case .fullscreen:
+            contentHeight = fullscreenHeight
+        case .intrinsic:
+            contentHeight = self.contentViewController.preferredHeight + self.keyboardHeight
+        case .percent(let percent):
+            contentHeight = bounds.height * CGFloat(percent) + self.keyboardHeight
+        case .marginFromTop(let margin):
+            contentHeight = bounds.height - margin + self.keyboardHeight
+        }
+        self.contentViewHeightConstraint?.constant = min(fullscreenHeight, contentHeight)
+        updateCompactFullscreenConstraintState()
+    }
+
     public func resize(to size: SheetSize,
                        duration: TimeInterval = 0.2,
                        options: UIView.AnimationOptions = [.curveEaseOut],
                        animated: Bool = true,
                        complete: (() -> Void)? = nil) {
-        
+        prepareHeightConstraintForResize()
         let previousSize = self.currentSize
         self.currentSize = size
         
@@ -613,6 +776,7 @@ public class SheetViewController: UIViewController {
         let newHeight = self.height(for: size)
         
         guard oldConstraintHeight != newHeight else {
+            updateCompactFullscreenConstraintState()
             return
         }
 
@@ -623,6 +787,7 @@ public class SheetViewController: UIViewController {
                 constraint.constant = newHeight
                 self.view.layoutIfNeeded()
             }, completion: { _ in
+                self.updateCompactFullscreenConstraintState()
                 self.didAnimateToNewSize?(self, size, newHeight)
                 if previousSize != size {
                     self.sizeChanged?(self, size, newHeight)
@@ -633,7 +798,8 @@ public class SheetViewController: UIViewController {
         } else {
             UIView.performWithoutAnimation {
                 self.contentViewHeightConstraint?.constant = self.height(for: size)
-                self.contentViewController.view.layoutIfNeeded()
+                self.updateCompactFullscreenConstraintState()
+                self.view.layoutIfNeeded()
             }
             self.didAnimateToNewSize?(self, size, newHeight)
             self.sizeChanged?(self, size, newHeight)
@@ -649,6 +815,8 @@ public class SheetViewController: UIViewController {
                         self.didDismiss?(self)
                     }
                 } else {
+                    self.adaptiveLayoutController?.tearDown()
+                    self.adaptiveLayoutController = nil
                     self.view.removeFromSuperview()
                     self.removeFromParent()
                     self.didDismiss?(self)
@@ -675,12 +843,44 @@ public class SheetViewController: UIViewController {
         self.didMove(toParent: parent)
         
         self.view.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            self.view.topAnchor.constraint(equalTo: view.topAnchor),
-            self.view.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            self.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            self.view.trailingAnchor.constraint(equalTo: view.trailingAnchor)
-        ])
+        if let adaptiveConfig = self.options.adaptiveInlineLayout {
+            if self.adaptiveCompactSizes.isEmpty {
+                self.adaptiveCompactSizes = self.sizes
+            }
+            let controller = SheetAdaptiveInlineLayoutController(config: adaptiveConfig, sheet: self)
+            self.adaptiveLayoutController = controller
+            controller.install(in: view)
+            self.setAdaptiveRegularWidth(controller.isRegularWidth)
+            if !self.adaptiveCompactSizes.isEmpty {
+                self.sizes = controller.isRegularWidth
+                    ? self.adaptiveRegularWidthSizes
+                    : self.adaptiveCompactSizes
+            }
+            controller.updateLayoutIfNeeded(
+                animated: false,
+                initialSize: controller.isRegularWidth ? nil : size)
+            // The caller's initial size is meaningful only for the compact card. If the sheet
+            // installed as a regular-width panel, honor the panel's own sizes instead — otherwise
+            // e.g. `.fixed(200)` leaves a 200pt-tall floating panel.
+            if controller.isRegularWidth {
+                self.animateIn(size: self.sizes.first, duration: duration, completion: completion)
+                return
+            }
+        } else if let guide = self.options.inlineLayoutGuide {
+            NSLayoutConstraint.activate([
+                self.view.topAnchor.constraint(equalTo: guide.topAnchor),
+                self.view.bottomAnchor.constraint(equalTo: guide.bottomAnchor),
+                self.view.leadingAnchor.constraint(equalTo: guide.leadingAnchor),
+                self.view.trailingAnchor.constraint(equalTo: guide.trailingAnchor)
+            ])
+        } else {
+            NSLayoutConstraint.activate([
+                self.view.topAnchor.constraint(equalTo: view.topAnchor),
+                self.view.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+                self.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+                self.view.trailingAnchor.constraint(equalTo: view.trailingAnchor)
+            ])
+        }
         self.animateIn(size: size, duration: duration, completion: completion)
     }
     
@@ -726,6 +926,8 @@ public class SheetViewController: UIViewController {
                 self.overlayView.alpha = 0
             },
             completion: { _ in
+                self.adaptiveLayoutController?.tearDown()
+                self.adaptiveLayoutController = nil
                 self.view.removeFromSuperview()
                 self.removeFromParent()
                 completion?()

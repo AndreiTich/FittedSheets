@@ -50,7 +50,25 @@ public struct SheetOptions {
     public var maxWidth: CGFloat?
 
     public var isRubberBandEnabled: Bool = false
-    
+
+    /// When set, `SheetViewController` pins its view to this layout guide instead of the
+    /// parent view in `animateIn(to:in:size:)`. The guide must already be installed in the
+    /// parent view's layout guide list before `animateIn` is called.
+    ///
+    /// Constraining the guide (rather than the sheet view directly) lets the host use the
+    /// full Auto Layout toolkit — `safeAreaLayoutGuide` anchors, priority-based adaptive
+    /// sizing, and pre-built activate/deactivate constraint sets — without the library
+    /// needing to know any of those details. `nil` preserves the default full-parent
+    /// edge-to-edge behavior.
+    ///
+    /// Ignored when ``adaptiveInlineLayout`` is set — the library owns the guide in that case.
+    public var inlineLayoutGuide: UILayoutGuide? = nil
+
+    /// When set, the sheet automatically switches between a full-width bottom card and a
+    /// fixed-width leading panel as the container's size class or width changes. The library
+    /// installs and updates its own layout guide — do not set ``inlineLayoutGuide`` manually.
+    public var adaptiveInlineLayout: AdaptiveInlineLayout? = nil
+
     /// Experimental flag that attempts to shrink the nested presentations more each time a new sheet is presented. This must be set before any sheet is presented.
     public static var shrinkingNestedPresentingViewControllers = false
     

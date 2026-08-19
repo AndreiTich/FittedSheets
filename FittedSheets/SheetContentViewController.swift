@@ -78,6 +78,11 @@ public class SheetContentViewController: UIViewController {
     public var pullBarView = UIView()
     public var gripView = UIView()
     private let overflowView = UIView()
+
+    var isOverflowViewHidden: Bool {
+        get { overflowView.isHidden }
+        set { overflowView.isHidden = newValue }
+    }
     
     public init(childViewController: UIViewController, options: SheetOptions) {
         self.options = options
