@@ -80,6 +80,7 @@
 		F8C1A07024E3017F00807078 /* Localize.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8C1A06F24E3017F00807078 /* Localize.swift */; };
 		F8FAC6B425A38D570042A307 /* HorizontalPaddingDemo.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8FAC6B325A38D570042A307 /* HorizontalPaddingDemo.swift */; };
 		F8FAC6B925A3930F0042A307 /* MaxWidthDemo.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8FAC6B825A3930F0042A307 /* MaxWidthDemo.swift */; };
+		A1C0117B2E0000010000C0DE /* CollapseToZeroDemo.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1C0117A2E0000010000C0DE /* CollapseToZeroDemo.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -185,6 +186,7 @@
 		F8C1A06F24E3017F00807078 /* Localize.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Localize.swift; sourceTree = "<group>"; };
 		F8FAC6B325A38D570042A307 /* HorizontalPaddingDemo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HorizontalPaddingDemo.swift; sourceTree = "<group>"; };
 		F8FAC6B825A3930F0042A307 /* MaxWidthDemo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MaxWidthDemo.swift; sourceTree = "<group>"; };
+		A1C0117A2E0000010000C0DE /* CollapseToZeroDemo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CollapseToZeroDemo.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -330,6 +332,7 @@
 				F83058F125BF710E00EE17E1 /* MaxMinHeightDemo copy.swift */,
 				F8FAC6B325A38D570042A307 /* HorizontalPaddingDemo.swift */,
 				F8FAC6B825A3930F0042A307 /* MaxWidthDemo.swift */,
+				A1C0117A2E0000010000C0DE /* CollapseToZeroDemo.swift */,
 				C4E231E424E55E4E00D367FD /* BlurDemo.swift */,
 				93F1F3652D4C136B0028C7F4 /* SnapToClosestSheetSizeDemo.swift */,
 				A1B2C3D32E5F67890ABCDEF0 /* LeadingPanelDemo.swift */,
@@ -507,6 +510,7 @@
 				F83058FD25BF777400EE17E1 /* SlideInAnimationBug118TagCell.swift in Sources */,
 				F857D0AE2204D709004C862F /* TableViewDemo.swift in Sources */,
 				F8FAC6B925A3930F0042A307 /* MaxWidthDemo.swift in Sources */,
+				A1C0117B2E0000010000C0DE /* CollapseToZeroDemo.swift in Sources */,
 				D9C73C1F290B2BDF002590EC /* CornerCurveDemo.swift in Sources */,
 				F857D0B02204D71E004C862F /* TableViewControllerDemo.swift in Sources */,
 				F8034165212625DD00EAD717 /* AppDelegate.swift in Sources */,

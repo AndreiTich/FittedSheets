@@ -220,6 +220,10 @@ public class SheetViewController: UIViewController {
     var overflowView = UIView()
     var overlayTapGesture: UITapGestureRecognizer?
     private var contentViewHeightConstraint: NSLayoutConstraint!
+    /// Pins the content view's bottom to the sheet's bottom. Its constant is 0 except while the
+    /// sheet is collapsed to a zero-height detent — see `isCollapsedOffscreen`.
+    private var contentViewBottomConstraint: NSLayoutConstraint!
+    private var clipsToBoundsBeforeCollapse: Bool?
     private var compactFullscreenTopConstraint: NSLayoutConstraint?
     private var compactTrueFullscreenTopConstraint: NSLayoutConstraint?
     
@@ -428,7 +432,7 @@ public class SheetViewController: UIViewController {
             } else {
                 top = max(12, UIApplication.shared.windows.first(where:  { $0.isKeyWindow })?.compatibleSafeAreaInsets.top ?? 12)
             }
-            $0.bottom.pinToSuperview()
+            self.contentViewBottomConstraint = $0.bottom.pinToSuperview()
             $0.top.pinToSuperview(inset: top, relation: .greaterThanOrEqual).priority = UILayoutPriority(999)
         }
         compactFullscreenTopConstraint = contentViewController.view.topAnchor.constraint(
@@ -442,6 +446,7 @@ public class SheetViewController: UIViewController {
     /// Converts the compact fullscreen detent from a copied height into edge constraints.
     /// Fixed/percent/intrinsic detents continue using the mutable height constraint.
     private func updateCompactFullscreenConstraintState() {
+        restoreClippingIfExpanded()
         guard let contentViewHeightConstraint,
               let compactFullscreenTopConstraint,
               let compactTrueFullscreenTopConstraint else { return }
@@ -463,6 +468,53 @@ public class SheetViewController: UIViewController {
             compactTrueFullscreenTopConstraint.isActive = false
             contentViewHeightConstraint.isActive = true
         }
+    }
+
+    /// Whether the content view sits below the sheet's bottom edge because the active detent
+    /// resolved to a zero height. See `applyContentHeight(_:)`.
+    private var isCollapsedOffscreen: Bool {
+        (contentViewBottomConstraint?.constant ?? 0) > 0
+    }
+
+    /// The height the current constraints show on screen: 0 while collapsed offscreen, otherwise
+    /// the height constraint's constant.
+    private var currentVisibleHeight: CGFloat {
+        isCollapsedOffscreen ? 0 : (contentViewHeightConstraint?.constant ?? 0)
+    }
+
+    /// Writes a resolved detent height into the content constraints.
+    ///
+    /// A zero height cannot be honoured by squeezing the content: the pull bar and the host's own
+    /// content carry required minimum heights, so Auto Layout would have to break a required
+    /// constraint and which one it drops is arbitrary — a strip of sheet can survive at the bottom
+    /// edge. Instead the content keeps its current height and is pushed below the sheet's bottom
+    /// edge, so its top anchor lands exactly on that edge. Any non-zero height moves it back.
+    private func applyContentHeight(_ height: CGFloat) {
+        guard let contentViewHeightConstraint, let contentViewBottomConstraint else { return }
+        if height <= 0 {
+            var contentHeight = max(contentViewHeightConstraint.constant, contentViewController.view.bounds.height)
+            if contentHeight <= 0 {
+                contentHeight = view.bounds.height
+            }
+            // The sheet's bottom edge is inset from the screen in regular width, so clip while
+            // collapsed or the content would show beneath the card. Restored once expanded again.
+            if clipsToBoundsBeforeCollapse == nil {
+                clipsToBoundsBeforeCollapse = view.clipsToBounds
+                view.clipsToBounds = true
+            }
+            contentViewBottomConstraint.constant = contentHeight
+        } else {
+            contentViewBottomConstraint.constant = 0
+            contentViewHeightConstraint.constant = height
+        }
+    }
+
+    /// Undoes the clipping applied while collapsed once the content is back on screen and the
+    /// transition has settled.
+    private func restoreClippingIfExpanded() {
+        guard !isCollapsedOffscreen, let clipsToBoundsBeforeCollapse else { return }
+        view.clipsToBounds = clipsToBoundsBeforeCollapse
+        self.clipsToBoundsBeforeCollapse = nil
     }
 
     /// Restores height-driven layout before an interactive or animated detent change.
@@ -497,7 +549,7 @@ public class SheetViewController: UIViewController {
         let point = gesture.translation(in: gesture.view?.superview)
         if gesture.state == .began {
             self.firstPanPoint = point
-            self.prePanHeight = self.contentViewController.view.bounds.height
+            self.prePanHeight = self.isCollapsedOffscreen ? 0 : self.contentViewController.view.bounds.height
             self.isPanning = true
             self.prepareHeightConstraintForResize()
         }
@@ -530,7 +582,7 @@ public class SheetViewController: UIViewController {
             case .cancelled, .failed:
                 UIView.animate(withDuration: 0.3, delay: 0, options: [.curveEaseOut], animations: {
                     self.contentViewController.view.transform = CGAffineTransform.identity
-                    self.contentViewHeightConstraint.constant = self.height(for: self.currentSize)
+                    self.applyContentHeight(self.height(for: self.currentSize))
                     self.transition.setPresentor(percentComplete: 0)
                     self.overlayView.alpha = 1
                 }, completion: { _ in
@@ -539,7 +591,7 @@ public class SheetViewController: UIViewController {
                 })
             
             case .began, .changed:
-                self.contentViewHeightConstraint.constant = newHeight
+                self.applyContentHeight(newHeight)
                 
                 if offset > 0 {
                     let percent = max(0, min(1, offset / max(1, newHeight)))
@@ -619,7 +671,7 @@ public class SheetViewController: UIViewController {
                     options: self.options.transitionAnimationOptions,
                     animations: {
                     self.contentViewController.view.transform = CGAffineTransform.identity
-                    self.contentViewHeightConstraint.constant = newContentHeight
+                    self.applyContentHeight(newContentHeight)
                     self.transition.setPresentor(percentComplete: 0)
                     self.overlayView.alpha = 1
                     self.view.layoutIfNeeded()
@@ -758,7 +810,7 @@ public class SheetViewController: UIViewController {
         case .marginFromTop(let margin):
             contentHeight = bounds.height - margin + self.keyboardHeight
         }
-        self.contentViewHeightConstraint?.constant = min(fullscreenHeight, contentHeight)
+        applyContentHeight(min(fullscreenHeight, contentHeight))
         updateCompactFullscreenConstraintState()
     }
 
@@ -771,11 +823,11 @@ public class SheetViewController: UIViewController {
         let previousSize = self.currentSize
         self.currentSize = size
         
-        let oldConstraintHeight = self.contentViewHeightConstraint.constant
+        let oldVisibleHeight = self.currentVisibleHeight
         
         let newHeight = self.height(for: size)
         
-        guard oldConstraintHeight != newHeight else {
+        guard oldVisibleHeight != newHeight else {
             updateCompactFullscreenConstraintState()
             return
         }
@@ -783,8 +835,8 @@ public class SheetViewController: UIViewController {
         self.willAnimateToNewSize?(self, size, newHeight)
         if animated {
             UIView.animate(withDuration: duration, delay: 0, options: options, animations: { [weak self] in
-                guard let self = self, let constraint = self.contentViewHeightConstraint else { return }
-                constraint.constant = newHeight
+                guard let self = self else { return }
+                self.applyContentHeight(newHeight)
                 self.view.layoutIfNeeded()
             }, completion: { _ in
                 self.updateCompactFullscreenConstraintState()
@@ -797,7 +849,7 @@ public class SheetViewController: UIViewController {
             })
         } else {
             UIView.performWithoutAnimation {
-                self.contentViewHeightConstraint?.constant = self.height(for: size)
+                self.applyContentHeight(newHeight)
                 self.updateCompactFullscreenConstraintState()
                 self.view.layoutIfNeeded()
             }

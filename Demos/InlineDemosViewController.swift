@@ -18,6 +18,7 @@ class InlineDemosViewController: UIViewController {
     var demos: [(UIViewController & Demoable).Type] = [
         OnlyCloseWithButtonDemo.self,
         ResizingDemo.self,
+        CollapseToZeroDemo.self,
         NavigationDemo.self,
         ScrollViewDemo.self,
         TableViewDemo.self,
